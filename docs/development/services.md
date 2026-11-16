@@ -115,6 +115,26 @@ response = await client.increment(IncrementRequest(key="Alice"))
 
 The target app's sidecar must run with `app-protocol: http` (the default in `deploy/apps`).
 
+### Over gRPC
+
+Pass `protocol=InvokeProtocol.GRPC` to call an app that serves the service over gRPC (see
+[Serve a service over gRPC](#serve-a-service-over-grpc)):
+
+```python
+from app_runtime.client import InvokeProtocol, dapr_client
+
+client = dapr_client(
+    CounterServiceClient, "counter-grpc", timeout_ms=5000, protocol=InvokeProtocol.GRPC
+)
+```
+
+The same generated client then sends gRPC over HTTP/2 to the sidecar's gRPC port
+(`DAPR_GRPC_ENDPOINT`, or `DAPR_RUNTIME_HOST` and `DAPR_GRPC_PORT`) with the target app id in the
+`dapr-app-id` header, and Dapr proxies the call to the target. Calls, errors and timeouts look
+the same to the caller. Two differences: Dapr's documentation states that its resiliency policies
+(retries) are not supported for gRPC proxying, and in standalone mode a call to an unknown app id
+fails only at its deadline.
+
 Use the Dapr SDK (`runtime.dapr`) for the other building blocks: state, pub/sub, metadata and so
 on. Its generic `invoke_method` is not needed for Connect services: it posts bytes to the same
 invocation API but does not know the contract, so typed messages, Connect error codes, deadlines
@@ -133,7 +153,56 @@ Add it to CI once `main` holds the contracts your consumers rely on. Tightening 
 does not break the wire format but can reject requests that used to pass; treat it as a behaviour
 change.
 
+## Serve a service over gRPC
+
+Any generated service can also be served over gRPC, by an app of its own that runs the same
+implementation with grpcio. Use it when a caller needs gRPC: full-duplex bidirectional streaming
+(see [Streaming](#streaming)) or clients that only speak gRPC. `apps/counter-grpc` is the example:
+
+```python
+from app_runtime.grpc_server import grpc_service, run_grpc
+from app_runtime.interceptors import server_interceptors
+
+
+def main() -> None:
+    settings = CounterGrpcSettings()
+
+    def services(runtime):
+        store = DaprStateStore(runtime.dapr, settings.statestore_name)
+        return [
+            grpc_service(
+                CounterService, CounterServiceImpl(store), interceptors=server_interceptors()
+            )
+        ]
+
+    run_grpc(settings, services, requirements=requirements(settings))
+```
+
+- `grpc_service()` takes the generated service protocol (`CounterService`), its implementation
+  and the same interceptors as `mount_connect`. Methods and message types come from the generated
+  code; the OpenTelemetry interceptor is added first, as for Connect applications, so traces have
+  the same spans.
+- `run_grpc()` runs the startup sequence of `create_app()` (sidecar, required components) and
+  opens the port only afterwards; on SIGTERM, calls in progress get time to finish.
+- The app is a separate Dapr app (`appProtocol: grpc` in `deploy/apps`), because a Dapr app has
+  one protocol. If it shares state with the Connect app, the state store needs
+  `keyPrefix: name` (see [Components](components.md)).
+- Request metadata reaches the implementation as `ctx.request_headers` (text metadata only), and
+  the remaining deadline as `ctx.timeout_ms`. Response headers and trailers set on the context are
+  sent; error details are not.
+
 ## Streaming
 
-The template covers unary RPC. Streaming methods need end-to-end support for streaming over Dapr
-service invocation and per-message validation; evaluate both before adding one.
+The example service is unary. Generated services can declare streaming methods; what works
+through Dapr depends on the protocol:
+
+| Stream type | Connect (service invocation) | gRPC (gRPC proxying) |
+| --- | --- | --- |
+| server streaming | yes | yes |
+| client streaming | yes | yes |
+| bidirectional, half-duplex (all requests, then responses) | yes | yes |
+| bidirectional, full-duplex | no: the sidecar answers only after the request stream ends | yes |
+
+`ValidationInterceptor` validates unary requests only; validate stream messages in the
+implementation. For gRPC streaming calls, `dapr_client` adds the `dapr-stream: true` header that
+Dapr's gRPC proxying expects.

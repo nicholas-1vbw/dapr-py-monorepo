@@ -1,6 +1,5 @@
-from collections.abc import Callable
-
 import pytest
+from app_runtime.client import InvokeProtocol
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from greeting.gateway import (
@@ -24,11 +23,31 @@ class FakeCounter:
         return self.visits[name]
 
 
-def client_for(counter: FakeCounter) -> TestClient:
+def client_for(counter: FakeCounter, requested: list[InvokeProtocol] | None = None) -> TestClient:
+    def get_counter(protocol: InvokeProtocol) -> FakeCounter:
+        if requested is not None:
+            requested.append(protocol)
+        return counter
+
     app = FastAPI()
-    get_counter: Callable[[], FakeCounter] = lambda: counter  # noqa: E731
     app.include_router(create_router(get_counter))
     return TestClient(app)
+
+
+def test_counter_protocol_comes_from_the_query() -> None:
+    requested: list[InvokeProtocol] = []
+    client = client_for(FakeCounter(), requested)
+    assert client.post("/greet", json={"name": "A"}).status_code == 200
+    assert client.post("/greet?protocol=grpc", json={"name": "A"}).status_code == 200
+    assert client.post("/greet?protocol=connect", json={"name": "A"}).status_code == 200
+    assert requested == [InvokeProtocol.CONNECT, InvokeProtocol.GRPC, InvokeProtocol.CONNECT]
+
+
+def test_unknown_protocol_is_rejected() -> None:
+    requested: list[InvokeProtocol] = []
+    response = client_for(FakeCounter(), requested).post("/greet?protocol=soap", json={"name": "A"})
+    assert response.status_code == 422
+    assert requested == []
 
 
 def test_greets_and_counts() -> None:

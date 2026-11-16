@@ -118,6 +118,15 @@ branch to the chart and give that environment its own components file. The app d
 long as the new provider offers the capabilities the app requires (the startup check verifies
 this).
 
+## Sharing state between apps
+
+Dapr prefixes state keys with the app id by default, so two apps never see each other's keys.
+`statestore` sets `keyPrefix: name` in `metadata` instead: keys are prefixed with the component
+name, so the `counter` and `counter-grpc` apps (one service over two protocols) share their
+counters. Changing `keyPrefix` changes the stored keys (for example from `counter||Alice` to
+`statestore||Alice`): data written before is no longer found and needs a migration. Without a
+reason to share, keep the default.
+
 ## Scopes and secrets
 
 - `scopes` lists the app ids allowed to load a component. It is an authorization list, not a

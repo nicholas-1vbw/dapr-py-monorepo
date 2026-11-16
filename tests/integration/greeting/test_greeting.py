@@ -61,7 +61,7 @@ def greeting_app(it_env: IntegrationEnv) -> Iterator[GreetingApp]:
     )
     service = CounterServiceImpl(LazyStateStore(lambda: app.state.runtime.state["store"]))
     mount_connect(app, CounterServiceASGIApplication(service, interceptors=server_interceptors()))
-    app.include_router(create_router(lambda: app.state.runtime.state["counter"]))
+    app.include_router(create_router(lambda _protocol: app.state.runtime.state["counter"]))
 
     provider = trace.get_tracer_provider()
     assert isinstance(provider, TracerProvider)

@@ -46,9 +46,9 @@ Python 3.14 with a single `uv.lock`.
 | Member | Kind | Responsibility |
 | --- | --- | --- |
 | `gen/python` (`contracts`) | generated | Python code generated from `proto/` by Buf. Not committed. |
-| `packages/app-runtime` | library | Settings, JSON logging, tracing, validation and error interceptors, Dapr startup checks, app factory. |
+| `packages/app-runtime` | library | Settings, JSON logging, tracing, validation and error interceptors, Dapr startup checks, app factory, Connect clients through Dapr, serving over gRPC. |
 | `packages/greeting` | library | The example domain: `greeting.gateway` (public API) and `greeting.counter` (`CounterService`). |
-| `apps/gateway`, `apps/counter` | app | Read settings, wire packages, expose a console script. |
+| `apps/gateway`, `apps/counter`, `apps/counter-grpc` | app | Read settings, wire packages, expose a console script. |
 
 Members declare their own dependencies; being in the workspace does not make one member a
 dependency of another. The root project is not a package: it holds development tools and the
@@ -82,41 +82,64 @@ used directly as Pydantic fields when a Python model needs to embed them.
 
 ## Calls between apps
 
-Apps call each other with Connect clients through Dapr service invocation:
+Apps call each other with the generated Connect clients through their Dapr sidecars, over one of
+two protocols. The caller chooses the protocol with `dapr_client(..., protocol=...)`; the gateway
+lets the visitor choose with `POST /greet?protocol=connect|grpc` (default `connect`).
 
 ```text
-gateway                       gateway sidecar         counter sidecar        counter
-CounterServiceClient ──HTTP──▶ :3500 ═══ mTLS/gRPC ═══▶ app channel ──HTTP──▶ CounterService (ASGI)
-  POST /v1.0/invoke/counter/method/example.counter.v1.CounterService/Increment
+Connect   gateway ──HTTP──▶ sidecar :3500 ══ mTLS/gRPC ══▶ sidecar ──HTTP──▶ counter       (uvicorn, FastAPI)
+            POST /v1.0/invoke/counter/method/example.counter.v1.CounterService/Increment
+gRPC      gateway ──h2c───▶ sidecar :50001 ═ mTLS/gRPC ══▶ sidecar ──h2c───▶ counter-grpc  (grpcio)
+            /example.counter.v1.CounterService/Increment, header dapr-app-id: counter-grpc
 ```
 
-- The client is the generated Connect client. Its base URL is the local sidecar's service
-  invocation API for the target app (`/v1.0/invoke/<app-id>/method`), the same URL the Dapr SDK
-  uses; the client appends the Connect method path and sends the Connect protocol (HTTP POST,
-  binary Protobuf body).
-- The sidecar address and API token are read from the Dapr SDK settings, so the Connect clients
-  and the SDK's `DaprClient` always use the same sidecar and credentials.
-- Dapr forwards the request to the target's sidecar and on to the app (`app-protocol: http`). The
+**Connect** (Dapr service invocation, the default):
+
+- The client's base URL is the local sidecar's service invocation API for the target app
+  (`/v1.0/invoke/<app-id>/method`), the same URL the Dapr SDK uses; the client appends the method
+  path and sends the Connect protocol (HTTP POST, binary Protobuf body).
+- Dapr forwards the request to the target's sidecar and on to the app (`appProtocol: http`). The
   target's HTTP status and Connect error body come back unchanged, so the caller receives a normal
   `ConnectError` (for example `INVALID_ARGUMENT`).
-- Because Connect unary calls are plain HTTP, the server runs on uvicorn inside FastAPI; no HTTP/2
-  or trailer support is required.
-- Dapr does not read the Protobuf payload or validate it; validation happens in the target app.
+- Unary and streaming calls are plain HTTP, so the server runs on uvicorn inside FastAPI. Through
+  Dapr, server streaming, client streaming and half-duplex bidirectional streaming work; full-duplex
+  bidirectional streaming does not, because the sidecar returns no response until the request
+  stream has ended.
 
-The scope is unary RPC. Streaming RPCs would need a transport that supports them end to end and
-are not part of this template.
+**gRPC** (Dapr gRPC proxying):
+
+- The client sends gRPC over HTTP/2 to the local sidecar's gRPC port, with the target app id in
+  the `dapr-app-id` header (added by `dapr_client`). Requests are not compressed: the sidecar
+  forwards the original `content-length` of a decompressed request, which the target rejects.
+- The target serves the same service implementation with grpcio (`app_runtime.grpc_server`,
+  `appProtocol: grpc`): handlers are built from the generated service's descriptor, messages are
+  the generated classes, and the same Connect interceptors run around each call. Status codes and
+  messages come back unchanged. All stream types work, including full-duplex bidirectional
+  streaming.
+- A Dapr app has one app port and one protocol, so a service offered over both protocols runs as
+  two apps (here `counter` and `counter-grpc`). They share state through the state store's
+  `keyPrefix: name`.
+- Differences to know: Dapr's documentation states that resiliency policies are not supported for
+  gRPC proxying (for streams, at most the initial connection); in standalone mode a call to an
+  unknown app id waits for the deadline instead of failing at once; binary (`-bin`) metadata is
+  not passed to the service; error details are not sent.
+
+On both paths the sidecar address and API token are read from the Dapr SDK settings, so the
+clients and the SDK's `DaprClient` always use the same sidecar and credentials, and Dapr does not
+read or validate the Protobuf payload: validation happens in the target app.
 
 The gateway exposes a plain JSON API (`POST /greet`) with FastAPI. Its request model checks only
-the shape of the body (422 when it does not match). The rules for a valid name are the counter's
-contract rules; the gateway turns the counter's `INVALID_ARGUMENT` into a 400 response with the
-violation message, and every other failure into a generic 502/503 response without internal
-details.
+the shape of the request (422 when the body or `protocol` does not match). The rules for a valid
+name are the counter's contract rules; the gateway turns the counter's `INVALID_ARGUMENT` into a
+400 response with the violation message, and every other failure into a generic 502/503 response
+without internal details.
 
 ## App startup
 
 `app_runtime.create_app()` configures JSON logging and OpenTelemetry tracing when it is called,
 before the app creates any Connect application or client. It returns a FastAPI app whose lifespan
-runs before uvicorn accepts any connection:
+runs before uvicorn accepts any connection (a gRPC app's `run_grpc()` runs the same steps before
+it opens its port):
 
 1. Wait for the sidecar's outbound readiness (`/v1.0/healthz/outbound`), then create the Dapr
    client.
@@ -127,7 +150,8 @@ runs before uvicorn accepts any connection:
 Steps 1 and 2 share one deadline, `APP_STARTUP_TIMEOUT_SECONDS`. If the sidecar is not ready in
 time, startup fails with `SidecarNotReady`; if components are missing, with the list of missing
 components. The process then exits with a non-zero code (also with `APP_RELOAD`). `/healthz` and
-`/readyz` therefore answer only after the checks passed; in Kubernetes the Pod never becomes ready
+`/readyz` therefore answer only after the checks passed, and a gRPC app's port opens only then
+(its probes check that the port accepts connections); in Kubernetes the Pod never becomes ready
 and the restart is visible.
 
 Requirements come from the app's code and settings, for example "the state store named by
@@ -163,7 +187,9 @@ implement one.
 | Logs | stdlib logging as JSON with `trace_id`/`span_id` | `APP_LOG_LEVEL` |
 
 W3C Trace Context propagates through Dapr, so one request produces one trace containing the
-gateway app, the gateway sidecar, the counter sidecar and the counter app. Apps and sidecars export
+gateway app, the gateway sidecar, the counter sidecar and the counter app (or `counter-grpc`).
+With gRPC proxying, the target sidecar passes on the `traceparent` it received, so the target
+app's span is a child of the caller's sidecar span rather than of its own sidecar's span. Apps and sidecars export
 to the same OTLP endpoint in local environments (Jaeger); in production the platform provides the
 endpoint. Without an endpoint, apps still propagate context but export nothing.
 
@@ -225,6 +251,11 @@ launcher reads it to build `dapr run` arguments; Helm uses it as values for the 
 `deploy/platform/charts/app` chart. Each environment adds its own overrides: the image reference,
 the environment variables of the infrastructure, and a NodePort Service for exposed apps.
 
+The protocol (`appProtocol: http` or `grpc`) decides how the framework checks the app: `/readyz`
+and `/healthz` for HTTP apps, an open port for gRPC apps (in `poe dev` and in the chart's probes).
+Integration test sidecars use the protocol of the member's app, and only HTTP apps restart on code
+changes in `poe dev`.
+
 ## Images
 
 ![Proto and workspace sources produce a shared wheelhouse consumed by every app image](assets/image-build.svg)
@@ -254,8 +285,8 @@ scripts/
 
 | Task module | Command | What it does |
 | --- | --- | --- |
-| `tasks/dev.py` | `poe dev` | infrastructure for `dev`, rendered Dapr resources, one `dapr run` per app, cleanup on exit |
-| `tasks/integration.py` | `poe integration` | infrastructure for `integration`, one `dapr run -- pytest` per member, parallel workers, results |
+| `tasks/dev.py` | `poe dev` | infrastructure for `dev`, rendered Dapr resources, one `dapr run` per app, readiness per protocol, cleanup on exit |
+| `tasks/integration.py` | `poe integration` | infrastructure for `integration`, one `dapr run -- pytest` per member (with the protocol of its app), parallel workers, results |
 | `tasks/kind.py` | `poe kind up` / `down` | cluster with everything deployed; deleting it with its images |
 | `tasks/e2e.py` | `poe e2e` | a fresh cluster, the BDD scenarios, diagnostics, cleanup |
 | `tasks/images.py` | `poe images` | Bake builds, optionally multi-platform and pushed |

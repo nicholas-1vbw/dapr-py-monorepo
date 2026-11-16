@@ -6,6 +6,10 @@ For each selected member with tests under tests/integration/<member>/ one task
 runs `dapr run ... -- python -m pytest tests/integration/<member>`. All tasks
 of a run share one set of backing services and one read-only resources
 directory; each task has its own sidecar, app id, ports and pytest process.
+
+A task's sidecar talks to its app over the `appProtocol` that deploy/apps
+declares for the member's app (http for members that provide no app), so the
+tests of a gRPC app serve it over gRPC.
 """
 
 import argparse
@@ -23,6 +27,7 @@ from xml.etree import ElementTree
 from packaging.utils import canonicalize_name
 
 from scripts.framework.cleanup import teardown
+from scripts.framework.description import Deployment, load_deployments
 from scripts.framework.docker import start_docker
 from scripts.framework.native import (
     NativeResources,
@@ -80,6 +85,15 @@ def select_packages(
     return sorted(set(requested))
 
 
+def app_protocol(member: str, deployments: Iterable[Deployment]) -> str:
+    """The protocol of the app that `member` provides, or http when it provides
+    none. A member whose apps declare different protocols is an error."""
+    protocols = {d.app_protocol for d in deployments if canonicalize_name(d.member) == member}
+    if len(protocols) > 1:
+        fail(f"apps of {member} declare different appProtocol values: {sorted(protocols)}")
+    return protocols.pop() if protocols else "http"
+
+
 def junit_failures(report: Path) -> int:
     """1 when pytest's report is missing or records failures, else 0.
 
@@ -105,9 +119,14 @@ class TaskResult:
 
 class Runner:
     def __init__(
-        self, record: RunRecord, resources: NativeResources, app_env: dict[str, str]
+        self,
+        record: RunRecord,
+        resources: NativeResources,
+        app_env: dict[str, str],
+        deployments: list[Deployment],
     ) -> None:
         self.record = record
+        self.deployments = deployments
         self.resources = resources
         self.app_env = app_env
         self.cancelled = threading.Event()
@@ -129,7 +148,7 @@ class Runner:
         command = dapr_run_command(
             app_id=app_id,
             ports=ports,
-            app_protocol="http",
+            app_protocol=app_protocol(package, self.deployments),
             resources_dir=self.resources.resources_dir,
             config_file=self.resources.config_file(""),
             command=pytest,
@@ -214,7 +233,7 @@ def main() -> None:
     try:
         infra = start_docker(record, "integration", expose=False)
         resources = render_native(record, infra.resources_values, omit_scopes=True)
-        runner = Runner(record, resources, infra.app_env)
+        runner = Runner(record, resources, infra.app_env, load_deployments())
         log(f"running {len(packages)} package task(s) with {args.workers} worker(s)")
         results = run_tasks(runner, packages, args.workers)
     except KeyboardInterrupt:

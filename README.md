@@ -5,9 +5,10 @@ just enough code to show every piece working together:
 
 - **Services**: contracts in Protobuf managed by [Buf](https://buf.build/), served and called with
   [Connect for Python](https://connectrpc.com/docs/python/getting-started/), request validation with
-  [Protovalidate](https://protovalidate.com/), a public HTTP API with FastAPI.
-- **Dapr**: service invocation between apps, a state store, startup checks of required
-  components, tracing across apps and sidecars.
+  [Protovalidate](https://protovalidate.com/), a public HTTP API with FastAPI. Optionally, the same
+  service implementation served over gRPC with [grpcio](https://grpc.io/docs/languages/python/).
+- **Dapr**: service invocation and gRPC proxying between apps, a state store, startup checks of
+  required components, tracing across apps and sidecars.
 - **Tests in three layers**: unit tests without Dapr, integration tests with a real sidecar, and
   BDD end-to-end tests on Kubernetes.
 - **Images and deployment**: one shared wheelhouse built with Docker Bake, small app images, Helm
@@ -19,18 +20,24 @@ Copy it, replace the example domain, and add your own packages and services by f
 ## The example
 
 ```text
-curl ──HTTP──▶ gateway ──▶ Dapr sidecar ══ service invocation ══▶ Dapr sidecar ──▶ counter ──▶ Redis
-                  │              │                                     │              │   (state store)
-                  └──────────────┴────────────── traces ───────────────┴──────────────┴──▶ Jaeger
+curl ──HTTP──▶ gateway ──▶ Dapr sidecar ══ service invocation (Connect) ══▶ Dapr sidecar ──▶ counter ───────┐
+                              │          ══ gRPC proxying (?protocol=grpc) ═▶ Dapr sidecar ──▶ counter-grpc ──┤
+                              │                                                                            ▼
+                              └──────────── traces of all apps and sidecars ──▶ Jaeger          Redis (state store)
 ```
 
-- **gateway** serves `POST /greet` and asks the counter for the visit number.
+- **gateway** serves `POST /greet` and asks the counter for the visit number, over Connect by
+  default or over gRPC with `?protocol=grpc`.
 - **counter** serves `CounterService` (Connect RPC) and stores counters in a Dapr state store,
   using ETags so that concurrent visits are never lost.
+- **counter-grpc** serves the same `CounterService` implementation over gRPC (grpcio) and shares
+  the counters. It is optional; see [Without gRPC](docs/development/template.md#without-grpc).
 
 ```bash
 $ curl -X POST localhost:8080/greet -H 'content-type: application/json' -d '{"name":"Alice"}'
 {"message":"Hello, Alice! You are visitor #1.","visits":1}
+$ curl -X POST 'localhost:8080/greet?protocol=grpc' -H 'content-type: application/json' -d '{"name":"Alice"}'
+{"message":"Hello, Alice! You are visitor #2.","visits":2}
 ```
 
 ## What this repository does not cover
@@ -59,7 +66,7 @@ Each task checks only the tools it uses. CI verifies the repository on Linux x86
 # 1. Generate code and install the workspace (once after cloning)
 uv run --only-group codegen poe setup
 
-# 2. Run both apps locally with Dapr sidecars, Redis and Jaeger
+# 2. Run the apps locally with Dapr sidecars, Redis and Jaeger
 uv run poe dev
 
 # 3. In another terminal
@@ -96,7 +103,7 @@ proto/                 Protobuf contracts (source of truth for RPC messages and 
 gen/python/            generated `contracts` package (code is generated, not committed)
 packages/app-runtime/  shared startup, logging, tracing, validation and Dapr checks
 packages/greeting/     the example domain: gateway API and counter service
-apps/gateway, counter  thin app entry points
+apps/                  thin app entry points: gateway, counter, counter-grpc
 tests/integration/     integration tests, one Dapr sidecar per package
 tests/e2e/             BDD scenarios on kind
 deploy/environment/    what the system needs: infrastructure instances and Dapr components

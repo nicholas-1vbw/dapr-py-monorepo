@@ -1,0 +1,25 @@
+[project]
+name = "counter-grpc"
+version = "0.1.0"
+description = "Counter app over gRPC: serves the same CounterService implementation with grpcio, backed by a Dapr state store."
+requires-python = ">=3.14"
+dependencies = [
+    "app-runtime",
+    "contracts",
+    "greeting",
+]
+
+[project.scripts]
+counter-grpc = "counter_grpc_app.main:main"
+
+[tool.uv.sources]
+app-runtime = { workspace = true }
+contracts = { workspace = true }
+greeting = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "counter_grpc_app"

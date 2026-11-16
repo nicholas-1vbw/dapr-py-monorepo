@@ -1,12 +1,13 @@
 [project]
 name = "app-runtime"
 version = "0.1.0"
-description = "Shared runtime support for apps: settings, logging, tracing, validation, error mapping and Dapr startup checks."
+description = "Shared runtime support for apps: settings, logging, tracing, validation, error mapping, Dapr startup checks and serving over Connect or gRPC."
 requires-python = ">=3.14"
 dependencies = [
     "connectrpc>=0.13.0",
     "connectrpc-otel>=0.3.0",
     "dapr[fastapi]>=1.19.0",
+    "grpcio>=1.85.1",
     "opentelemetry-api>=1.45.0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.45.0",
     "opentelemetry-exporter-otlp-proto-http>=1.45.0",

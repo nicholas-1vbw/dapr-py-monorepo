@@ -81,7 +81,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with AsyncExitStack() as stack:
             try:
-                runtime = await _start(settings, requirements, on_startup, stack)
+                runtime = await start_runtime(settings, requirements, on_startup, stack)
             except BaseException:
                 _stop_reloader(settings)
                 raise
@@ -117,13 +117,14 @@ def create_app(
     return app
 
 
-async def _start(
+async def start_runtime(
     settings: RuntimeSettings,
     requirements: Sequence[ComponentRequirement],
     on_startup: StartupHook | None,
     stack: AsyncExitStack,
 ) -> Runtime:
-    """Steps 2-4 of the startup sequence, all bounded by the startup timeout."""
+    """Steps 2-4 of the startup sequence; steps 2 and 3 share the startup
+    timeout. Used by `create_app` and by `app_runtime.grpc_server`."""
     deadline = time.monotonic() + settings.startup_timeout_seconds
     await wait_for_sidecar(deadline)
     # The SDK checks the sidecar again here; it is ready, so this returns at once.
