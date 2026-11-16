@@ -1,0 +1,34 @@
+# Defaults; deploy/apps/<deployment>.yaml supplies the app-specific values.
+appId: ""
+appPort: 8080
+appProtocol: http
+daprConfig: ""            # name of a Dapr Configuration in the same namespace
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+env: {}                   # APP_* and OTEL_* variables of the app container
+
+# Set by the environment for apps exposed outside the mesh (`expose` in the
+# deployment input); other apps are reached through Dapr and need no Service.
+service:
+  enabled: false
+  type: ClusterIP
+  nodePort: null
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    memory: 256Mi
+
+# Read by the framework; ignored by the chart.
+member: ""
+bakeTarget: ""
+command: ""
+expose: {}               # {http: <host port>} to reach the app from the host in dev and kind

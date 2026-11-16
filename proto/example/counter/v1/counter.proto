@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package example.counter.v1;
+
+import "buf/validate/validate.proto";
+
+// CounterService keeps named counters in a Dapr state store.
+service CounterService {
+  // Increment adds one to the counter identified by key and returns the new value.
+  rpc Increment(IncrementRequest) returns (IncrementResponse);
+}
+
+message IncrementRequest {
+  // Counter identifier: 1-64 letters, digits, spaces, underscores or hyphens.
+  string key = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+    pattern: "^[A-Za-z0-9 _-]+$"
+  }];
+}
+
+message IncrementResponse {
+  // Counter value after the increment.
+  int64 value = 1;
+}

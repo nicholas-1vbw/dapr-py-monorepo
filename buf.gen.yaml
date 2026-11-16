@@ -1,0 +1,10 @@
+# Generation plugins run locally; they are installed from PyPI by the `codegen`
+# dependency group and pinned in uv.lock.
+version: v2
+clean: true
+plugins:
+  - local: protoc-gen-py
+    out: gen/python/src/contracts
+    include_imports: true
+  - local: protoc-gen-connectrpc
+    out: gen/python/src/contracts

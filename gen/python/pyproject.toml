@@ -1,0 +1,16 @@
+[project]
+name = "contracts"
+version = "0.1.0"
+description = "Python code generated from proto/ by Buf: protobuf-py messages and Connect services/clients."
+requires-python = ">=3.14"
+dependencies = [
+    "connectrpc>=0.13.0",
+    "protobuf-py>=0.7.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "contracts"

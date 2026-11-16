@@ -1,0 +1,20 @@
+[project]
+name = "greeting"
+version = "0.1.0"
+description = "Greeting domain: the public greeting API and the visit counter service."
+requires-python = ">=3.14"
+dependencies = [
+    "app-runtime",
+    "contracts",
+    "dapr>=1.19.0",
+    "fastapi>=0.163.0",
+    "pydantic>=2.14.0",
+]
+
+[tool.uv.sources]
+app-runtime = { workspace = true }
+contracts = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14"]
+build-backend = "uv_build"

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: app
+description: One app instance with a Dapr sidecar. Values come from deploy/apps/<deployment>.yaml plus environment overrides.
+type: application
+version: 0.1.0

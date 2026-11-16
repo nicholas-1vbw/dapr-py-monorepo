@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["components", "configuration", "resources"],
+  "properties": {
+    "components": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "version", "resource", "scopes"],
+        "properties": {
+          "type": { "enum": ["state.redis"] },
+          "version": { "type": "string" },
+          "resource": { "type": "string" },
+          "scopes": { "type": "array", "items": { "type": "string" } },
+          "metadata": { "type": "object", "additionalProperties": { "type": "string" } }
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "required": ["name", "tracing"],
+      "properties": {
+        "name": { "type": "string" },
+        "tracing": {
+          "type": "object",
+          "required": ["samplingRate"],
+          "properties": {
+            "samplingRate": { "type": "string" },
+            "resource": { "type": "string" }
+          }
+        }
+      }
+    },
+    "omitScopes": { "type": "boolean" },
+    "resources": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind", "host", "port"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "const": "redis" },
+              "host": { "type": "string", "minLength": 1 },
+              "port": { "type": "integer" },
+              "password": { "type": "string" },
+              "passwordSecret": {
+                "type": "object",
+                "required": ["name", "key"],
+                "properties": { "name": { "type": "string" }, "key": { "type": "string" } }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "endpoint"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "const": "otlp" },
+              "endpoint": { "type": "string", "minLength": 1 },
+              "insecure": { "type": "boolean" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

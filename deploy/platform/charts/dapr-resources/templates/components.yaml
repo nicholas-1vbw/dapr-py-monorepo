@@ -1,0 +1,33 @@
+{{- range $name, $component := .Values.components }}
+---
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: {{ $name }}
+spec:
+  type: {{ $component.type }}
+  version: {{ $component.version }}
+  metadata:
+    {{- if eq $component.type "state.redis" }}
+    {{- $redis := include "dapr-resources.resource" (list $ $component.resource "redis") | fromYaml }}
+    - name: redisHost
+      value: "{{ $redis.host }}:{{ $redis.port }}"
+    {{- if $redis.passwordSecret }}
+    - name: redisPassword
+      secretKeyRef:
+        name: {{ $redis.passwordSecret.name }}
+        key: {{ $redis.passwordSecret.key }}
+    {{- else if $redis.password }}
+    - name: redisPassword
+      value: {{ $redis.password | quote }}
+    {{- end }}
+    {{- end }}
+    {{- range $key, $value := $component.metadata }}
+    - name: {{ $key }}
+      value: {{ $value | quote }}
+    {{- end }}
+{{- if not $.Values.omitScopes }}
+scopes:
+  {{- toYaml $component.scopes | nindent 2 }}
+{{- end }}
+{{- end }}

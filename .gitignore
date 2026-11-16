@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.pyright/
+
+# Generated code (rebuilt by `uv run poe proto`)
+gen/python/src/
+
+# Run records, logs and reports
+.run/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store

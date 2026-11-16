@@ -1,0 +1,10 @@
+# Dapr components this system uses. Values of
+# deploy/platform/charts/dapr-resources, combined with the resources-values.yaml
+# of each environment (where the infrastructure instances are).
+components:
+  statestore:
+    type: state.redis
+    version: v1
+    resource: redis              # `resource.name` of an instance in infra.yaml
+    scopes: [counter]            # app ids allowed to use the component
+    metadata: {}                 # behaviour settings, e.g. keyPrefix

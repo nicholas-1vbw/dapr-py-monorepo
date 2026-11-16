@@ -1,0 +1,5 @@
+apiVersion: v2
+name: infra
+description: Infrastructure instances of a local Kubernetes environment, from deploy/environment/infra.yaml. Not used in production.
+type: application
+version: 0.1.0

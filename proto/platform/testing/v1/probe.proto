@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package platform.testing.v1;
+
+import "buf/validate/validate.proto";
+
+// ProbeService is a contract for the tests of the shared runtime packages
+// (packages/app-runtime, gen/python). It is not part of the system and stays
+// when the example system is replaced.
+service ProbeService {
+  // Echo returns the text it receives.
+  rpc Echo(EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+  // Text to echo: 1-64 characters.
+  string text = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 64
+  }];
+}
+
+message EchoResponse {
+  string text = 1;
+}

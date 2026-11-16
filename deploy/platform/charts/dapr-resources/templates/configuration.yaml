@@ -1,0 +1,15 @@
+{{- $tracing := .Values.configuration.tracing }}
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: {{ .Values.configuration.name }}
+spec:
+  tracing:
+    samplingRate: {{ $tracing.samplingRate | quote }}
+    {{- if and $tracing.resource (hasKey .Values.resources $tracing.resource) }}
+    {{- $otlp := include "dapr-resources.resource" (list $ $tracing.resource "otlp") | fromYaml }}
+    otel:
+      endpointAddress: {{ $otlp.endpoint | quote }}
+      isSecure: {{ not $otlp.insecure }}
+      protocol: grpc
+    {{- end }}

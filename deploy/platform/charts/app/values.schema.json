@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "appId",
+    "appPort",
+    "appProtocol",
+    "image"
+  ],
+  "properties": {
+    "appId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "appPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "appProtocol": {
+      "enum": [
+        "http",
+        "grpc"
+      ]
+    },
+    "daprConfig": {
+      "type": "string"
+    },
+    "image": {
+      "type": "object",
+      "required": [
+        "repository",
+        "tag"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "replicas": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "type": {
+          "enum": [
+            "ClusterIP",
+            "NodePort",
+            "LoadBalancer"
+          ]
+        },
+        "nodePort": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "resources": {
+      "type": "object"
+    },
+    "member": {
+      "type": "string"
+    },
+    "bakeTarget": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "expose": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "http": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    }
+  }
+}
