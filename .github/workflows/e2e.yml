@@ -46,5 +46,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: e2e-run
-          path: .run/
+          # .run/ is a hidden directory; the kubeconfig and the Helm cache stay out.
+          include-hidden-files: true
+          path: |
+            .run/
+            !.run/**/kubeconfig
+            !.run/helm/
           retention-days: 7
