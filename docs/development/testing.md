@@ -42,7 +42,9 @@ How a run works:
    ```
 
    Each task has its own sidecar, app id, ports and pytest process; all tasks share the
-   infrastructure and the resources. Tasks also get the `appEnv` variables of the instances.
+   infrastructure and the resources. Tasks also get the `appEnv` variables of the instances. The
+   sidecar talks to the tests over the `appProtocol` of the member's app in `deploy/apps`
+   (`--app-protocol grpc` for `counter-grpc`), and over HTTP for members that provide no app.
 4. Tear down the run's containers and processes, and print one line per package with its log.
    JUnit reports and logs stay in `.run/<run-id>/packages/<package>/`.
 
@@ -52,16 +54,18 @@ and cleans up.
 ### Writing integration tests
 
 The fixtures in `tests/integration/conftest.py` provide `it_env` (run id, app id, app port) and
-`unique_name`. `tests/integration/support.py` has `serve(app, port)`, which runs an app in
-a background thread.
+`unique_name`. `tests/integration/support.py` has `serve(app, port)`, which runs an HTTP app in
+a background thread, and `serve_grpc_app(settings, services, requirements)`, which does the same
+for services served over gRPC.
 
 - **Calls that need Dapr to reach your code** (service invocation): serve the app on
   `it_env.app_port`, the port the sidecar forwards to, and call it through the sidecar with
-  `dapr_client(<GeneratedClient>, it_env.app_id, ...)`. See `tests/integration/greeting/`.
+  `dapr_client(<GeneratedClient>, it_env.app_id, ...)`. See `tests/integration/greeting/`, and
+  `tests/integration/counter-grpc/` for the same over gRPC (`protocol=InvokeProtocol.GRPC`).
 - **Outbound calls only** (state, metadata): use the Dapr client directly; no server needed. See
   `tests/integration/app-runtime/`.
-- **Isolate data**: build keys from `unique_name`, and delete what you write. The state store also
-  prefixes keys with the task's app id, which includes the run id.
+- **Isolate data**: build keys from `unique_name`, and delete what you write. Tasks and runs share
+  the state store, and its keys are not prefixed with the app id (`keyPrefix: name`).
 - Behaviour across several apps and sidecars belongs in end-to-end tests.
 
 ## End-to-end tests

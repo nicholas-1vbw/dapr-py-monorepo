@@ -41,14 +41,17 @@ uv run poe dev
 
 `dev` starts the infrastructure instances enabled for `dev` in `deploy/environment/infra.yaml`
 (Redis and Jaeger in the example) with Docker, renders the Dapr resources, and runs every app in
-`deploy/apps/` with its own sidecar (`dapr run`). Each app restarts when the source of the app or of
-a workspace member it depends on changes. When the apps are ready it prints
-`ready: counter, gateway. Press Ctrl+C to stop.`
+`deploy/apps/` with its own sidecar (`dapr run`). Each HTTP app restarts when the source of the app
+or of a workspace member it depends on changes; gRPC apps (`counter-grpc`) do not, restart the
+session for them. When the apps are ready it prints
+`ready: counter-grpc, counter, gateway. Press Ctrl+C to stop.`
 
 Ports declared under `expose` are on the same host ports in `dev` and `kind`. In the example:
 
 ```bash
 curl -X POST localhost:8080/greet -H 'content-type: application/json' -d '{"name":"Alice"}'
+# The same call to the counter over gRPC (the counter-grpc app); the visit count is shared
+curl -X POST 'localhost:8080/greet?protocol=grpc' -H 'content-type: application/json' -d '{"name":"Alice"}'
 open http://localhost:16686   # Jaeger
 ```
 

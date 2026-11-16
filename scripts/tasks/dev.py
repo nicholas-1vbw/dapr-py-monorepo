@@ -5,10 +5,14 @@
 NAME refers to deploy/apps/<NAME>.yaml (default: all). The infrastructure
 instances enabled for `dev` in deploy/environment/infra.yaml run in Docker for
 this session; everything is removed when you press Ctrl+C.
+
+HTTP apps restart on code changes (unless --no-reload); gRPC apps do not and
+need a restart of the session.
 """
 
 import argparse
 import json
+import socket
 import sys
 import time
 import tomllib
@@ -19,7 +23,7 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 from scripts.framework.cleanup import teardown
-from scripts.framework.description import load_deployments
+from scripts.framework.description import Deployment, load_deployments
 from scripts.framework.docker import start_docker
 from scripts.framework.native import SidecarPorts, dapr_run_command, render_native, sidecar_env
 from scripts.framework.repo import workspace_members
@@ -47,9 +51,20 @@ def source_dirs(member: str) -> list[str]:
 DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def ready(port: int) -> bool:
+def ready(port: int, protocol: str) -> bool:
+    """An HTTP app answers /readyz once its startup checks passed; a gRPC app
+    opens its port only then."""
+    if protocol == "grpc":
+        with socket.socket() as sock:
+            sock.settimeout(2)
+            return sock.connect_ex(("127.0.0.1", port)) == 0
     with DIRECT.open(f"http://127.0.0.1:{port}/readyz", timeout=2) as response:
         return response.status == 200
+
+
+def reloads(deployment: Deployment, no_reload: bool) -> bool:
+    """Only HTTP apps (uvicorn) can restart on code changes."""
+    return not no_reload and deployment.app_protocol == "http"
 
 
 def main() -> None:
@@ -69,7 +84,7 @@ def main() -> None:
         native = render_native(record, infra.resources_values, omit_scopes=False)
         config_files = {d.name: native.config_file(d.dapr_config) for d in deployments}
         processes = []
-        app_ports = {}
+        app_ports: dict[str, tuple[int, str]] = {}
         for deployment in deployments:
             ports = SidecarPorts.allocate(deployment.expose.get("http"))
             env = {
@@ -78,7 +93,7 @@ def main() -> None:
                 # Loopback only: other machines must not reach the apps around Dapr.
                 "APP_HOST": "127.0.0.1",
                 "APP_PORT": str(ports.app),
-                "APP_RELOAD": "false" if args.no_reload else "true",
+                "APP_RELOAD": str(reloads(deployment, args.no_reload)).lower(),
                 "APP_RELOAD_DIRS": json.dumps(source_dirs(deployment.member)),
                 **infra.app_env,
             }
@@ -91,12 +106,12 @@ def main() -> None:
                 command=[str(bin_dir / deployment.command)],
             )
             processes.append(start_process(record, f"dev:{deployment.name}", command, env=env))
-            app_ports[deployment.name] = ports.app
+            app_ports[deployment.name] = (ports.app, deployment.app_protocol)
 
         def all_ready() -> bool:
             if any(p.poll() is not None for p in processes):
                 fail("an app or its sidecar exited during startup; see the output above")
-            return all(ready(port) for port in app_ports.values())
+            return all(ready(port, protocol) for port, protocol in app_ports.values())
 
         wait_until(all_ready, timeout=120, what="the apps to be ready")
 

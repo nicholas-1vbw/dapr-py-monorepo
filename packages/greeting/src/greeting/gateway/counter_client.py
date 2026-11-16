@@ -1,8 +1,9 @@
-"""`VisitCounter` backed by `CounterService` through Dapr service invocation."""
+"""`VisitCounter` backed by `CounterService`, called through the Dapr sidecar over
+Connect (service invocation) or gRPC (gRPC proxying)."""
 
 import logging
 
-from app_runtime.client import dapr_client, is_unavailable
+from app_runtime.client import InvokeProtocol, dapr_client, is_unavailable
 from connectrpc.code import Code
 from connectrpc.errors import ConnectError
 from contracts.example.counter.v1.counter_connect import CounterServiceClient
@@ -20,8 +21,16 @@ class ConnectVisitCounter:
     close it on shutdown.
     """
 
-    def __init__(self, counter_app_id: str, *, timeout_ms: int) -> None:
-        self._client = dapr_client(CounterServiceClient, counter_app_id, timeout_ms=timeout_ms)
+    def __init__(
+        self,
+        counter_app_id: str,
+        *,
+        timeout_ms: int,
+        protocol: InvokeProtocol = InvokeProtocol.CONNECT,
+    ) -> None:
+        self._client = dapr_client(
+            CounterServiceClient, counter_app_id, timeout_ms=timeout_ms, protocol=protocol
+        )
 
     async def increment(self, name: str) -> int:
         try:

@@ -36,6 +36,11 @@ def main() -> None:
   does not serve until they are loaded. An app without component needs passes nothing.
 - `run()` serves the factory with uvicorn; `APP_RELOAD=true` enables reload for development.
 
+An app that serves its services over gRPC instead (`apps/counter-grpc`) has no FastAPI app: its
+`main()` calls `run_grpc(settings, services, requirements=...)` with the same settings and
+requirements, and `deploy/apps` declares `appProtocol: grpc`. It does not reload on code changes.
+See [Serve a service over gRPC](services.md#serve-a-service-over-grpc).
+
 ## Add an app
 
 Example: a `billing` app.
@@ -117,7 +122,7 @@ chart `deploy/platform/charts/app`:
 | `member`, `command` | `dev` | workspace member and console script to run |
 | `bakeTarget` | `kind`, `e2e` | image target to build |
 | `appPort` | `kind` | container port of the app in Kubernetes (`poe dev` listens on `expose.http`, or on a free port) |
-| `appProtocol` | all | protocol the sidecar uses to reach the app |
+| `appProtocol` | all | `http` (default) or `grpc`: protocol the sidecar uses to reach the app; also decides the probes and the protocol of the member's integration test sidecar |
 | `daprConfig` | all | Dapr Configuration (tracing) to attach, defined in `deploy/platform/charts/dapr-resources`; empty means none (native sidecars then get an empty Configuration, never the machine's default) |
 | `env` | all | `APP_*` settings |
 | `expose` | `dev`, `kind` | `{http: <host port>}`: reach the app from the host on that port. Other apps get no Service and are reached through Dapr |
@@ -132,8 +137,10 @@ The same app can be deployed several times with different app ids by adding anot
 
 ## Probes and startup
 
-The chart configures a startup probe on `/healthz` (up to two minutes), readiness on `/readyz` and
-liveness on `/healthz`. Waiting for the sidecar and for the required components shares one deadline,
+For HTTP apps the chart configures a startup probe on `/healthz` (up to two minutes), readiness on
+`/readyz` and liveness on `/healthz`. gRPC apps get the same probes as TCP checks of the app port,
+which opens only after the startup checks passed (`poe dev` waits for the port in the same way).
+The app port is named `http` in Kubernetes whatever the protocol. Waiting for the sidecar and for the required components shares one deadline,
 `APP_STARTUP_TIMEOUT_SECONDS` (60 by default); keep it below the startup probe budget so that an app
 that cannot start exits with its reason in the log before Kubernetes restarts it. Both endpoints answer only after the Dapr startup checks passed; a missing
 component keeps the Pod unready and the container restarts with the reason in its log.

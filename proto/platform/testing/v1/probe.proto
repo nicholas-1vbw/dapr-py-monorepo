@@ -10,6 +10,12 @@ import "buf/validate/validate.proto";
 service ProbeService {
   // Echo returns the text it receives.
   rpc Echo(EchoRequest) returns (EchoResponse);
+  // Split returns each character of the text as a separate message.
+  rpc Split(SplitRequest) returns (stream SplitResponse);
+  // Join returns the texts it receives, concatenated.
+  rpc Join(stream JoinRequest) returns (JoinResponse);
+  // Chat answers each message as soon as it arrives.
+  rpc Chat(stream ChatRequest) returns (stream ChatResponse);
 }
 
 message EchoRequest {
@@ -21,5 +27,29 @@ message EchoRequest {
 }
 
 message EchoResponse {
+  string text = 1;
+}
+
+message SplitRequest {
+  string text = 1;
+}
+
+message SplitResponse {
+  string text = 1;
+}
+
+message JoinRequest {
+  string text = 1;
+}
+
+message JoinResponse {
+  string text = 1;
+}
+
+message ChatRequest {
+  string text = 1;
+}
+
+message ChatResponse {
   string text = 1;
 }

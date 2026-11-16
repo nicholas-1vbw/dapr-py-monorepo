@@ -31,6 +31,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
+            # The app port is named `http` whatever its protocol (see `expose`).
             - name: http
               containerPort: {{ .Values.appPort }}
           env:
@@ -40,25 +41,20 @@ spec:
             - name: {{ $name }}
               value: {{ $value | quote }}
             {{- end }}
-          # The app answers probes only after its Dapr startup checks passed.
-          # Keep this budget (2s x 60 = 120s) above APP_STARTUP_TIMEOUT_SECONDS
-          # (60s by default), so a failing app exits and logs the reason itself
-          # before Kubernetes restarts it.
+          # The app answers probes only after its Dapr startup checks passed:
+          # an HTTP app serves /healthz and /readyz from then on, a gRPC app
+          # opens its port only then. Keep the startup budget (2s x 60 = 120s)
+          # above APP_STARTUP_TIMEOUT_SECONDS (60s by default), so a failing app
+          # exits and logs the reason itself before Kubernetes restarts it.
           startupProbe:
-            httpGet:
-              path: /healthz
-              port: http
+            {{- include "app.probe" (list . "/healthz") | nindent 12 }}
             periodSeconds: 2
             failureThreshold: 60
           readinessProbe:
-            httpGet:
-              path: /readyz
-              port: http
+            {{- include "app.probe" (list . "/readyz") | nindent 12 }}
             periodSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /healthz
-              port: http
+            {{- include "app.probe" (list . "/healthz") | nindent 12 }}
             periodSeconds: 10
           securityContext:
             allowPrivilegeEscalation: false

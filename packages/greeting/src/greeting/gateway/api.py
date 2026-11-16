@@ -1,8 +1,10 @@
 """HTTP routes of the public greeting API."""
 
 from collections.abc import Callable
+from typing import Annotated
 
-from fastapi import APIRouter
+from app_runtime.client import InvokeProtocol
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -36,8 +38,9 @@ def _error(status: int, error: str, detail: str) -> JSONResponse:
     return JSONResponse(ErrorResponse(error=error, detail=detail).model_dump(), status_code=status)
 
 
-def create_router(counter: Callable[[], VisitCounter]) -> APIRouter:
-    """Routes that obtain the visit counter from `counter()` on each request."""
+def create_router(counter: Callable[[InvokeProtocol], VisitCounter]) -> APIRouter:
+    """Routes that obtain the visit counter for the requested protocol from
+    `counter(protocol)` on each request."""
     router = APIRouter()
 
     @router.post(
@@ -49,9 +52,14 @@ def create_router(counter: Callable[[], VisitCounter]) -> APIRouter:
             503: {"model": ErrorResponse},
         },
     )
-    async def greet_visitor(body: GreetRequest) -> GreetResponse | JSONResponse:
+    async def greet_visitor(
+        body: GreetRequest,
+        protocol: Annotated[
+            InvokeProtocol, Query(description="Protocol of the call to the counter")
+        ] = InvokeProtocol.CONNECT,
+    ) -> GreetResponse | JSONResponse:
         try:
-            message, visits = await greet(counter(), body.name)
+            message, visits = await greet(counter(protocol), body.name)
         except InvalidName as error:
             return _error(400, "invalid_argument", error.detail)
         except CounterUnavailable, CounterBusy:

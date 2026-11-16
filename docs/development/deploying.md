@@ -96,7 +96,7 @@ helm upgrade --install gateway deploy/platform/charts/app \
 - Helm merges the two values files key by key: `env` adds to and overrides the settings in the
   deployment input.
 - Only apps that are called from outside the mesh need `service.enabled`; the others are reached
-  through Dapr service invocation.
+  through Dapr (service invocation, or gRPC proxying for gRPC apps such as `counter-grpc`).
 - `--wait` returns when the Pods are ready, which means each app's Dapr startup checks passed. An
   app whose required components are missing stays unready and logs the missing components.
 

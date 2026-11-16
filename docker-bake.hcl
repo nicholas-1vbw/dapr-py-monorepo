@@ -14,7 +14,7 @@ variable "TAG" {
 }
 
 group "default" {
-  targets = ["gateway", "counter"]
+  targets = ["gateway", "counter", "counter-grpc"]
 }
 
 target "_common" {
@@ -51,4 +51,10 @@ target "counter" {
   inherits   = ["_app"]
   dockerfile = "deploy/docker/counter/default.Dockerfile"
   tags       = ["${IMAGE_PREFIX}/counter:${TAG}"]
+}
+
+target "counter-grpc" {
+  inherits   = ["_app"]
+  dockerfile = "deploy/docker/counter-grpc/default.Dockerfile"
+  tags       = ["${IMAGE_PREFIX}/counter-grpc:${TAG}"]
 }

@@ -8,6 +8,7 @@ dependencies = [
     "app-runtime",
     "contracts",
     "counter",
+    "counter-grpc",
     "gateway",
     "greeting",
 ]
@@ -43,6 +44,7 @@ members = ["gen/python", "packages/*", "apps/*"]
 app-runtime = { workspace = true }
 contracts = { workspace = true }
 counter = { workspace = true }
+counter-grpc = { workspace = true }
 gateway = { workspace = true }
 greeting = { workspace = true }
 
