@@ -1,0 +1,50 @@
+name: E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: End-to-end tests on kind
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Read pinned versions
+        id: versions
+        run: >-
+          uv run --no-project --with pyyaml --with packaging python -m scripts.tasks.versions
+          buf=buf.version helm=helm.version kind=kind.version kubectl=kubectl.version
+          >> "$GITHUB_OUTPUT"
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: ${{ steps.versions.outputs.buf }}
+          setup_only: true
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ steps.versions.outputs.helm }}
+      - name: Install kind and kubectl
+        env:
+          KIND_VERSION: ${{ steps.versions.outputs.kind }}
+          KUBECTL_VERSION: ${{ steps.versions.outputs.kubectl }}
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSLo "$HOME/.local/bin/kind" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          curl -fsSLo "$HOME/.local/bin/kubectl" "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x "$HOME/.local/bin/kind" "$HOME/.local/bin/kubectl"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Set up the workspace
+        run: uv run --only-group codegen poe setup
+      - name: End-to-end tests
+        run: uv run poe e2e
+      - name: Upload run records
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-run
+          path: .run/
+          retention-days: 7

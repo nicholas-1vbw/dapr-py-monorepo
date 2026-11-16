@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13">
+  <title>Image build: a shared wheelhouse consumed by every app image</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <style>
+      .box { stroke: #8c959f; stroke-width: 1.2; }
+      .src { fill: #f6f8fa; }
+      .group { fill: #f0f8ff; stroke: #54aeff; stroke-dasharray: 5 4; }
+      .stage { fill: #ddf4ff; stroke: #54aeff; }
+      .image { fill: #dafbe1; stroke: #4ac26b; }
+      .env { fill: #fff8c5; stroke: #d4a72c; }
+      .title { font-weight: 600; fill: #1f2328; }
+      .note { fill: #57606a; font-size: 12px; }
+      .edge { stroke: #57606a; stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="900" height="340" fill="#ffffff"/>
+
+  <text x="20" y="26" class="title">Sources</text>
+  <rect x="20" y="40" width="205" height="54" rx="6" class="box src"/>
+  <text x="34" y="62" class="title">Manifests + uv.lock</text>
+  <text x="34" y="81" class="note">pyproject.toml of every member</text>
+  <rect x="20" y="124" width="205" height="54" rx="6" class="box src"/>
+  <text x="34" y="146" class="title">proto/ + Buf config</text>
+  <text x="34" y="165" class="note">buf.yaml, buf.lock, buf.gen.yaml</text>
+  <rect x="20" y="208" width="205" height="54" rx="6" class="box src"/>
+  <text x="34" y="230" class="title">Member sources</text>
+  <text x="34" y="249" class="note">packages/, apps/</text>
+
+  <rect x="250" y="12" width="300" height="270" rx="8" class="box group"/>
+  <text x="264" y="32" class="title">Bake target: wheels</text>
+  <rect x="266" y="44" width="190" height="54" rx="6" class="box stage"/>
+  <text x="280" y="66" class="title">third-party stage</text>
+  <text x="280" y="85" class="note">locked runtime wheels</text>
+  <rect x="266" y="150" width="190" height="72" rx="6" class="box stage"/>
+  <text x="280" y="172" class="title">workspace stage</text>
+  <text x="280" y="191" class="note">buf generate (locked plugins)</text>
+  <text x="280" y="208" class="note">wheels of all members</text>
+  <rect x="470" y="96" width="66" height="72" rx="6" class="box stage"/>
+  <text x="481" y="124" class="title">wheel-</text>
+  <text x="481" y="142" class="title">house</text>
+
+  <rect x="610" y="40" width="160" height="54" rx="6" class="box image"/>
+  <text x="624" y="62" class="title">gateway image</text>
+  <text x="624" y="81" class="note">offline install, non-root</text>
+  <rect x="610" y="170" width="160" height="54" rx="6" class="box image"/>
+  <text x="624" y="192" class="title">counter image</text>
+  <text x="624" y="211" class="note">offline install, non-root</text>
+
+  <rect x="800" y="98" width="90" height="70" rx="6" class="box env"/>
+  <text x="812" y="122" class="title">kind load</text>
+  <text x="812" y="140" class="note">or registry</text>
+  <text x="812" y="156" class="note">push</text>
+
+  <path d="M225,67 L266,71" class="edge"/>
+  <path d="M225,74 C245,90 232,170 266,178" class="edge"/>
+  <path d="M225,151 C245,151 232,186 266,186" class="edge"/>
+  <path d="M225,235 C245,235 232,200 266,200" class="edge"/>
+  <path d="M456,71 C470,71 482,80 492,96" class="edge"/>
+  <path d="M456,186 C470,186 482,178 492,168" class="edge"/>
+  <path d="M536,120 C570,120 580,67 610,67" class="edge"/>
+  <path d="M536,144 C570,144 580,197 610,197" class="edge"/>
+  <path d="M770,67 C790,67 790,110 800,115" class="edge"/>
+  <path d="M770,197 C790,197 790,156 800,150" class="edge"/>
+
+  <text x="20" y="306" class="note">Arrows show artifact dependencies. Third-party wheels depend only on the manifests and the lock, so source changes do not rebuild them.</text>
+  <text x="20" y="326" class="note">App images share the wheelhouse, not an environment: each installs only its own app package and what it declares.</text>
+</svg>

@@ -1,0 +1,3 @@
+# Filled by the framework from deploy/environment/infra.yaml (instances enabled
+# for kind), with file contents and the NodePorts of exposed ports added.
+instances: {}

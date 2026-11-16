@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Read pinned versions
+        id: versions
+        run: >-
+          uv run --no-project --with pyyaml --with packaging python -m scripts.tasks.versions
+          buf=buf.version helm=helm.version >> "$GITHUB_OUTPUT"
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: ${{ steps.versions.outputs.buf }}
+          setup_only: true
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ steps.versions.outputs.helm }}
+      - name: Set up the workspace
+        run: uv run --only-group codegen poe setup
+      - name: Lint and unit tests
+        run: uv run poe check
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Read pinned versions
+        id: versions
+        run: >-
+          uv run --no-project --with pyyaml --with packaging python -m scripts.tasks.versions
+          buf=buf.version helm=helm.version dapr=dapr.runtimeVersion >> "$GITHUB_OUTPUT"
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: ${{ steps.versions.outputs.buf }}
+          setup_only: true
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ steps.versions.outputs.helm }}
+      - name: Install the Dapr CLI and runtime
+        env:
+          DAPR_VERSION: ${{ steps.versions.outputs.dapr }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/dapr/cli/v${DAPR_VERSION}/install/install.sh \
+            | /bin/bash -s "${DAPR_VERSION}"
+          dapr init --slim --runtime-version "${DAPR_VERSION}"
+          echo "$HOME/.dapr/bin" >> "$GITHUB_PATH"
+      - name: Set up the workspace
+        run: uv run --only-group codegen poe setup
+      - name: Integration tests
+        run: uv run poe integration --workers 2
+      - name: Upload run records
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-run
+          path: .run/
+          retention-days: 7

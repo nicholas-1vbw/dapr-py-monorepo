@@ -1,0 +1,11 @@
+# Deployment input of the `counter` app instance.
+# Read by the framework and used as Helm values of deploy/platform/charts/app.
+appId: counter
+member: counter          # workspace member that provides the app
+bakeTarget: counter      # image target in docker-bake.hcl
+command: counter         # console script started by the native launcher
+appPort: 8080
+appProtocol: http
+daprConfig: app-config   # Dapr Configuration (tracing) from deploy/platform/charts/dapr-resources
+env:
+  APP_STATESTORE_NAME: statestore

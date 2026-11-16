@@ -1,0 +1,106 @@
+{{- range $name, $instance := .Values.instances }}
+{{- $labels := dict "app.kubernetes.io/name" $name "app.kubernetes.io/part-of" "infra" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- toYaml $labels | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {{- toYaml $labels | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- toYaml $labels | nindent 8 }}
+      {{- if $instance.files }}
+      annotations:
+        # Files are mounted with subPath, which never updates in place: a new
+        # checksum restarts the Pod when their content changes.
+        checksum/files: {{ toJson $instance.files | sha256sum }}
+      {{- end }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: {{ $instance.image }}
+          {{- with $instance.args }}
+          args: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $instance.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          ports:
+            {{- range $port, $number := $instance.ports }}
+            - name: {{ $port }}
+              containerPort: {{ $number }}
+            {{- end }}
+          {{- with $instance.ready }}
+          readinessProbe:
+            exec:
+              command: {{- toYaml .command | nindent 16 }}
+            periodSeconds: 2
+          {{- end }}
+          {{- if $instance.files }}
+          volumeMounts:
+            {{- range $file, $spec := $instance.files }}
+            - name: files
+              mountPath: {{ $spec.path }}
+              subPath: {{ $file }}
+              readOnly: true
+            {{- end }}
+          {{- end }}
+      {{- if $instance.files }}
+      volumes:
+        - name: files
+          configMap:
+            name: {{ $name }}-files
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- toYaml $labels | nindent 4 }}
+spec:
+  selector: {{- toYaml $labels | nindent 4 }}
+  ports:
+    {{- range $port, $number := $instance.ports }}
+    - name: {{ $port }}
+      port: {{ $number }}
+      targetPort: {{ $port }}
+    {{- end }}
+{{- if $instance.nodePorts }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-exposed
+  labels: {{- toYaml $labels | nindent 4 }}
+spec:
+  type: NodePort
+  selector: {{- toYaml $labels | nindent 4 }}
+  ports:
+    {{- range $port, $nodePort := $instance.nodePorts }}
+    - name: {{ $port }}
+      port: {{ index $instance.ports $port }}
+      targetPort: {{ $port }}
+      nodePort: {{ $nodePort }}
+    {{- end }}
+{{- end }}
+{{- if $instance.files }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-files
+  labels: {{- toYaml $labels | nindent 4 }}
+data:
+  {{- range $file, $spec := $instance.files }}
+  {{ $file }}: {{ $spec.content | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

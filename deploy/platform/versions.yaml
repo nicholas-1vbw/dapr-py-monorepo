@@ -1,0 +1,20 @@
+# Versions of the platform tools used by local environments and image builds.
+dapr:
+  # Runtime of native sidecars (`dapr init --slim --runtime-version`) and of
+  # the Dapr control plane chart installed in kind.
+  runtimeVersion: "1.19.1"
+  chartRepository: https://dapr.github.io/helm-charts
+  chartVersion: "1.19.1"
+
+buf:
+  # Buf CLI used to generate code inside the image build.
+  version: "1.75.0"
+
+# Versions installed by CI. Local runs accept any Helm 4 and a recent kind and
+# kubectl (see docs/development/getting-started.md).
+helm:
+  version: "v4.3.1"
+kind:
+  version: "v0.33.0"
+kubectl:
+  version: "v1.35.0"

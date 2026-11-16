@@ -1,0 +1,17 @@
+# Format of the resources-values.yaml consumed by deploy/platform/charts/dapr-resources:
+# where the backing services of an environment are. Local environments
+# generate this file under .run/<run-id>/; production environments provide
+# their own. This example is documentation only and is not used as a default.
+resources:
+  redis:
+    kind: redis
+    host: redis.example.internal
+    port: 6379
+    # Kubernetes only: read the password from a Secret in the namespace.
+    passwordSecret:
+      name: redis-credentials
+      key: password
+  tracing:
+    kind: otlp
+    endpoint: otel-collector.observability.svc:4317   # OTLP over gRPC
+    insecure: false

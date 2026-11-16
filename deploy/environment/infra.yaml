@@ -1,0 +1,53 @@
+# Infrastructure instances this system needs in local environments, described
+# once for every target: the framework runs them with Docker (dev, integration)
+# and in Kubernetes (kind). Production environments provide their own.
+#
+# Per instance:
+#   image          container image (pinned)
+#   args, env      container arguments and environment
+#   ports          named container ports
+#   files          files from deploy/environment/files/ mounted read-only:
+#                  {file name: path in the container}
+#   ready          command run inside the container; exit 0 means ready
+#   environments   where it runs: dev, integration, kind
+#   expose         host ports in dev and kind: {port name: host port}
+#   resource       its entry in resources-values.yaml, which Dapr components
+#                  refer to by name
+#   appEnv         environment variables given to every app
+#
+# In `resource` and `appEnv`, {host} and {port:<name>} are replaced with the
+# address apps and sidecars use in each target.
+
+redis:
+  image: redis:7.4.6-alpine
+  ports:
+    redis: 6379
+  ready:
+    command: [redis-cli, ping]
+  environments: [dev, integration, kind]
+  resource:
+    name: redis
+    value:
+      kind: redis
+      host: "{host}"
+      port: "{port:redis}"
+
+jaeger:
+  image: jaegertracing/jaeger:2.23.0
+  ports:
+    otlp: 4317
+    ui: 16686
+  ready:
+    command: [wget, -q, -O, /dev/null, "http://127.0.0.1:13133/status"]
+  environments: [dev, kind]
+  expose:
+    ui: 16686
+  resource:
+    name: tracing
+    value:
+      kind: otlp
+      endpoint: "{host}:{port:otlp}"
+      insecure: true
+  appEnv:
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://{host}:{port:otlp}"
+    OTEL_EXPORTER_OTLP_PROTOCOL: grpc

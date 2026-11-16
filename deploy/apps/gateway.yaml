@@ -1,0 +1,13 @@
+# Deployment input of the `gateway` app instance.
+# Read by the framework and used as Helm values of deploy/platform/charts/app.
+appId: gateway
+member: gateway
+bakeTarget: gateway
+command: gateway
+appPort: 8080
+appProtocol: http
+daprConfig: app-config
+expose:
+  http: 8080             # the public API: localhost:8080 in dev and kind
+env:
+  APP_COUNTER_APP_ID: counter
